@@ -4,15 +4,14 @@ import torch
 from torch import optim
 from models import BaseVAE
 from models.types_ import *
-from utils import data_loader
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 from torchvision import transforms
 import torchvision.utils as vutils
 from torchvision.datasets import CelebA
 from torch.utils.data import DataLoader
 
 
-class VAEXperiment(pl.LightningModule):
+class VAEXperiment(pl.core.LightningModule):
 
     def __init__(self,
                  vae_model: BaseVAE,
@@ -31,14 +30,13 @@ class VAEXperiment(pl.LightningModule):
     def forward(self, input: Tensor, **kwargs) -> Tensor:
         return self.model(input, **kwargs)
 
-    def training_step(self, batch, batch_idx, optimizer_idx = 0):
+    def training_step(self, batch, batch_idx):
         real_img, labels = batch
         self.curr_device = real_img.device
 
         results = self.forward(real_img, labels = labels)
         train_loss = self.model.loss_function(*results,
                                               M_N = self.params['kld_weight'], #al_img.shape[0]/ self.num_train_imgs,
-                                              optimizer_idx=optimizer_idx,
                                               batch_idx = batch_idx)
 
         self.log_dict({key: val.item() for key, val in train_loss.items()}, sync_dist=True)

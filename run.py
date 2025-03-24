@@ -1,17 +1,24 @@
-import os
-import yaml
+import sys, os
 import argparse
-import numpy as np
+import yaml
+
 from pathlib import Path
-from models import *
-from experiment import VAEXperiment
+
+import numpy as np
 import torch.backends.cudnn as cudnn
-from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.utilities.seed import seed_everything
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+
+from lightning import Trainer
+from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+from lightning.pytorch.strategies import DDPStrategy
+
 from dataset import VAEDataset
-from pytorch_lightning.plugins import DDPPlugin
+from experiment import VAEXperiment
+from models import *
+from utils import seed_everything
+
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 
 parser = argparse.ArgumentParser(description='Generic runner for VAE models')
@@ -33,13 +40,13 @@ tb_logger =  TensorBoardLogger(save_dir=config['logging_params']['save_dir'],
                                name=config['model_params']['name'],)
 
 # For reproducibility
-seed_everything(config['exp_params']['manual_seed'], True)
+seed_everything(config['exp_params']['manual_seed'], config['exp_params']['deterministic'])
 
 model = vae_models[config['model_params']['name']](**config['model_params'])
 experiment = VAEXperiment(model,
                           config['exp_params'])
 
-data = VAEDataset(**config["data_params"], pin_memory=len(config['trainer_params']['gpus']) != 0)
+data = VAEDataset(**config["data_params"], pin_memory=len(config['trainer_params']['accelerator']) == 'gpu')
 
 data.setup()
 runner = Trainer(logger=tb_logger,
@@ -50,7 +57,7 @@ runner = Trainer(logger=tb_logger,
                                      monitor= "val_loss",
                                      save_last= True),
                  ],
-                 strategy=DDPPlugin(find_unused_parameters=False),
+                 strategy=DDPStrategy(find_unused_parameters=False),
                  **config['trainer_params'])
 
 
